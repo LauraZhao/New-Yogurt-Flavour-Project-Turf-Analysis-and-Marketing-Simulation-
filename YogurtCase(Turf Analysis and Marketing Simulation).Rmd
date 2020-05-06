@@ -1,0 +1,247 @@
+---
+title: "Analysis of Launching New Greek Yogurt Flavors"
+author: "MSBA Team2:Isaac Revette, Ruixuan Zhao, Zhuoyi Ying, Jingren Liu, Zhikai Zhu"
+date: "2/2/2020"
+output:  html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+## SQL CODE ##
+```{r,echo = TRUE}
+##dataset1: Stores sales data for Greek yogurt(2009.11-2010.10)##
+# select Flavor1, sum(Sales) as sales from storeItemSales
+# join itemsAttributes on storeItemSales.`Item.Num` = itemsAttributes.`Item.Num`
+# where date(Week_Ending) < '2010-11-1' and Class = 'GREEK'
+# group by Flavor1
+# order by sum(Sales) desc;
+
+##dataset2: Stores sales data for Greek yogurt(2010.11-2011.11)(SLIDE 3)####
+# select Flavor1, sum(Sales) as sales from storeItemSales
+# join itemsAttributes on storeItemSales.`Item.Num` = itemsAttributes.`Item.Num`
+# where date(Week_Ending) >= '2010-11-1' and Class = 'GREEK'
+# group by Flavor1
+# order by sum(Sales) desc;
+
+##dataset3: Stores sales data for Regular yogurt(2009.11-2010.10)##
+# select Flavor1, sum(Sales) as sales from storeItemSales
+# join itemsAttributes on storeItemSales.`Item.Num` = itemsAttributes.`Item.Num`
+# where date(Week_Ending) < '2010-11-1' and Class = 'REGULAR'
+# group by Flavor1
+# order by sum(Sales) desc;
+
+##dataset4: Stores sales data for Regular yogurt(2010.11-2010.11)(SLIDE 3)##
+# select Flavor1, sum(Sales) as sales from storeItemSales
+# join itemsAttributes on storeItemSales.`Item.Num` = itemsAttributes.`Item.Num`
+# where date(Week_Ending) >= '2010-11-1' and Class = 'REGULAR'
+# group by Flavor1
+# order by sum(Sales) desc;
+
+#NOTICE:After examining the data, We decided not use the data from 2009.11 to #2010.10, 
+#because such data only included 7 flavors, which might cause bias.
+#We only use the data from 2010.11 to 2011.11
+
+##dataset5: Data for Checking the survey responses
+# select Flavor1 as flavor, round(sum(Sales),2) as sales from survItemSales
+# inner join itemsAttributes
+# on survItemSales.`Item.Num` = itemsAttributes.`Item.Num`
+# where itemsAttributes.Class = 'GREEK' and date(saledate)>'2010-11-01'
+# group by Flavor1
+# order by Sales desc;
+
+##dataset6: Data for DEMOGRAPHIC(SLIDE 6)##
+# select hshldDemograph.`Household.Num`,FamilySize,(FamilySize-NumAdults) as Numkids,Flavor1,Class, sum(sales)
+# from hshldDemograph join randItemSales on hshldDemograph.`Household.Num` = randItemSales.`Household.Num`
+# join itemsAttributes on randItemSales.`Item.Num`= itemsAttributes.`Item.Num`
+# where SaleDate> "2010-11-01" and hshldDemograph.`Household.Num` in
+# (select hshldDemograph.`Household.Num`
+#  from hshldDemograph join randItemSales on hshldDemograph.`Household.Num` = randItemSales.`Household.Num`
+#  group by hshldDemograph.`Household.Num`
+#  having count(*) > 100)
+# group by hshldDemograph.`Household.Num`,FamilySize,Numkids,Flavor1,Class;  
+
+```
+
+
+
+## OUTPUT FOR SLIDE 3 ##
+```{r,echo = TRUE}
+########OUTPUT FOR SLIDE 3############
+#The charts were generated in Tableau
+```
+
+
+
+## OUTPUT FOR SLIDE 4 ##
+```{r, echo = TRUE}
+########OUTPUT FOR SLIDE 4############
+#Clean the survey data
+#Drop the data for those who did not eat Greek yogurt, and spent too much time in #finishing the survey
+library(foreign)
+library(ggplot2)
+library(readr)
+survResponses <- read_csv("survResponses.csv")
+
+#Remove Respondents Who Answered 1 to Question 1 (dont eat greek yogurt)
+SR = data.frame(survResponses[survResponses$Q1 == 1,])
+
+#Create column of time taken and drop those who take too much
+SR$duration = difftime(SR$V9,SR$V8,unit = 'mins')
+SR$duration = as.numeric(SR$duration)
+SR = SR[SR$duration < 30,]
+
+#Subset only questions about flavor purchases
+SR = SR[,15:37]
+
+#Fill NA (no resposne) with 2, meaning they would never buy (assumption)
+SR[is.na(SR)] = 2
+
+#Rename Columns by Flavor
+Flavors = c("Almond", "Banana", 'BlackCherry',	'Blueberry', 'Caramel', 'Chai', 'Chocolate', 'Cinnamon',	'Coconut',	'Honey',	'KeyLimePie',	'Lemon',	'Mango',	'Maple',	'Peach',	'Pineapple',	'Plain',	'Pomegranate',	'Raspberry',	'Strawberry',	'StrawberryBanana',	'Vanilla',	'VanillaBanana')
+colnames(SR) = Flavors
+rank1_SR = SR
+
+#Reverse order of numbers (0=2, 1=1, 2=0)
+rank1_SR[SR == 0] <- 2
+rank1_SR[SR == 2] <- 0
+ranks1 = sort(colSums(rank1_SR))
+#ranks1 is the ranking of consumers' flavor preference
+#store data for visualisation in Tableau
+#write.csv(ranks1, "Flavor_Ranks.csv")
+
+#In this slide, we also used dataset5, to check if the respondents' actions are #consistent with their responses
+#The visualisation for dataset5 was generated in Tableau
+```
+
+
+
+## OUTPUT FOR SLIDE 5 ##
+```{r, echo = TRUE}
+########OUTPUT FOR SLIDE 5############
+#Build data frame to input into Turf Analysis
+SR_new = SR
+
+#SR_new where only regularly purchase are counted
+SR_new[SR==0] = 1
+SR_new[SR==1 | SR==2] = 0
+
+#Replace 0 with 1 and replace 2 with 0
+SR[SR == 0] <- 1
+SR[SR == 2] <- 0
+
+#Reorder SR so original set is first
+turf_data = SR[,c(4,10,15,17,20,22,1,2,3,5,6,7,8,9,11,12,13,14,16,18,19,21,23)]
+
+#TURF Analysis
+measReach = function(data){
+    if(is.null(dim(data))){ #if data is a vector
+        ret = sum(data>0,na.rm=TRUE)/length(data)
+    } else if(ncol(data)==1){ #if data has only one column
+        ret = sum(data>0,na.rm=TRUE)/length(data)
+    }
+    else { #if data has multiple columns
+        ret = sum(apply(data>0,1,any),na.rm=TRUE)/nrow(data)
+        return(ret)
+    }
+}
+
+evalNext = function(nextSet,set,data,measure=measReach){
+    vals = numeric(length(nextSet)) #set up storage for return value
+    for(k in 1:length(nextSet)){ #loop over the options in nextSet
+        if(length(set)==0){         #if no existing options
+            vals[k] = measure(data[,nextSet[k]]) 
+        } else {                    #if existing options
+            vals[k] = measure(data[,c(set,nextSet[k])])
+        }
+    }
+    vals
+}
+
+evalFull = function(fullSet,data,origSet=numeric(0),measure=measReach){
+    curSet = origSet; #the current set of included options
+    remSet = fullSet[!(fullSet%in%origSet)]; #the remaining set of options to consider
+    K = length(remSet)
+    optVals = numeric(K); #create storage for the optimal values (optVals)
+    ordSet = numeric(K); #create storage for ordered set
+    for(i in 1:K){          #loop over the remaining set consider
+        tmpVals = evalNext(remSet,curSet,data,measure); #calculate vector of next evaluations
+        k = which.max(tmpVals) #pick the option that gives max measure, note will pick first case if a tie!
+        optVals[i] = tmpVals[k] #add optimal value
+        ordSet[i] = remSet[k]   #add index of option that creates optimal value
+        curSet = c(curSet,ordSet[i]); #add optimal next option to current set
+        remSet = remSet[-k];          #delete optimal next option from remaining set
+    }
+    #creaets a "TURF object" containing ordSet, optVals, origSet, origVal, measure, and pnames
+    turf = list(ordSet=ordSet,optVals=optVals,origSet=origSet,origVal=measure(data[,origSet]),measure=measure,pnames=colnames(data))
+    class(turf)="TURF" #makes the list into a TURF object so that can call plot.TURF
+    turf  #return turf
+}
+#creates ggplot barplot for a turf object
+plot.TURF=function(turf,...){
+    if(class(turf)!="TURF"){
+        cat("Object not a turf.")
+    } else {
+        df = with(turf,data.frame(vals = c(origVal,optVals),titles=paste(0:length(ordSet),c("Original",pnames[ordSet]),sep=":")))
+        #with(turf,barplot(c(origVal,optVals),names.arg=c("Original",pnames[ordSet])))
+        dodge = position_dodge(width=.75); ##to form constant dimensions positioning for all geom's
+        gp = ggplot(df,aes(y=vals,x=titles))
+        gp + geom_bar(position=dodge,stat="identity",col=1,fill=4,width=.75)
+    }
+}
+
+og = c('Strawberry','Vanilla','Blueberry','Honey','Peach','Plain')
+turf = evalFull(Flavors,SR_new,og)
+plot(turf)
+
+turf_output = data.frame(Flavor = c("Original Set", turf$ordSet), Reach = c(turf$origVal, turf$optVals))
+
+#Export the table for visualisation in Tableau
+#write.csv(turf_output, "TURF Analysis.csv")
+
+```
+
+
+
+## OUTPUT FOR SLIDE6 ##
+```{r,echo = TRUE}
+########OUTPUT FOR SLIDE 6############
+#Demographic Analysis
+#Compared the class and flavor preference between the families with different #number of kids
+library("reshape")
+kids = read.csv("KIDS_2.csv")
+
+#if the family has more than 3 kids
+kids$KidsOver3 = kids$Numkids>3  
+
+###greek or regular
+#calculate the sum of sales Group by number of kids in the families and yogurt class
+kids_1 = aggregate(x = list("sum of sales" = kids$sum.sales),
+                   by = list("KidsOver3"= kids$KidsOver3,"Class"=kids$Class),
+                   FUN = sum)
+#cast dataframe 
+kids_1 = cast(kids_1,KidsOver3~Class)
+kids_1$V1 = NULL
+#calulate the percentage of money spend
+kids_1$PerOfGreek = kids_1$GREEK/(kids_1$REGULAR+kids_1$GREEK)
+kids_1
+
+###flavor
+#calculate the sum of sales Group by number of kids in the families and yogurt flavor
+kids_2 = aggregate(x = list("sum of sales" = kids$sum.sales),
+                   by = list("KidsOver3"= kids$KidsOver3,"Flavor"=kids$Flavor1),
+                   FUN = sum)
+#cast dataframe
+kids_2 = cast(kids_2,Flavor~KidsOver3)
+names(kids_2) = c("Flavor","Less than 3 kids","More than 3 kids")
+kids_2 = kids_2[!is.na(kids_2$`More than 3 kids`),]
+kids_2
+
+#store data for visualisation in Tableau
+#install.packages("xlsx")
+#library(xlsx) #load the package
+#write.xlsx(x = df, file = "kids_2.xlsx")
+
+```
